@@ -29,6 +29,41 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans JP',sans-
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 20px 28px 24px;
+  position: relative;
+  overflow: hidden;
+}
+/* 実写フィットネス背景 */
+.site-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, rgba(15,15,15,0.97) 0%, rgba(15,15,15,0.85) 55%, rgba(15,15,15,0.4) 100%),
+    url('https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1200&q=80') no-repeat right center;
+  background-size: auto 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+.site-header > * { position: relative; z-index: 1; }
+
+/* 日替わり名言 */
+.daily-quote {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(201,168,76,0.07);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #d4b86a;
+  font-style: italic;
+}
+.daily-quote .quote-author {
+  font-size: 0.65rem;
+  color: var(--muted);
+  font-style: normal;
+  margin-top: 4px;
+  font-family: 'Space Mono', monospace;
 }
 .site-header .label {
   font-family:'Space Mono',monospace;
@@ -218,7 +253,8 @@ canvas { width:100%!important; height:100%!important; }
   body { padding-bottom: env(safe-area-inset-bottom); }
 
   /* ヘッダー */
-  .site-header { padding: 16px 16px 18px; padding-top: calc(16px + env(safe-area-inset-top)); }
+  .site-header { padding: 16px 16px 18px; padding-top: calc(16px + env(safe-area-inset-top)); min-height: 160px; }
+  .site-header::before { background-size: auto 100%; }
   .site-header h1 { font-size: 1.4rem; }
   .site-header .subtitle { font-size: 0.72rem; }
   .tip-bar { margin: 10px 12px 0; padding: 9px 12px; font-size: 0.7rem; }
@@ -853,8 +889,11 @@ canvas { width:100%!important; height:100%!important; }
 
 <div class="site-header">
   <div class="label">TOMOHIRO BODY PROJECT V9</div>
-  <h1>今日は未来の自分を作る日</h1>
-  <div class="subtitle">食事もトレーニングも。ボタン追加と自由入力の両方に対応した完成版です。</div>
+  <h1 id="daily-quote-title">今日は未来の自分を作る日</h1>
+  <div class="daily-quote" id="daily-quote-box">
+    <div id="daily-quote-text"></div>
+    <div class="quote-author" id="daily-quote-author"></div>
+  </div>
   <div class="goal-row">
     <div class="goal-box">
       <div class="glabel">目標体重</div>
@@ -917,6 +956,10 @@ canvas { width:100%!important; height:100%!important; }
   <div class="section">
     <div class="section-title">✅ 今日の必須ルール</div>
     <div class="checklist-grid" id="daily-rules"></div>
+    <div class="input-row" style="margin-top:10px">
+      <div class="form-group"><input type="text" id="custom-rule-input" placeholder="ルールを追加（例：間食なし）" inputmode="text" autocomplete="off"></div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="addCustomRule()">追加</button>
+    </div>
   </div>
 
   <div class="section">
@@ -992,7 +1035,7 @@ canvas { width:100%!important; height:100%!important; }
   <div class="section">
     <div class="section-title">📸 ボディ写真記録</div>
     <div class="photo-upload-area" id="photo-drop-area">
-      <input type="file" id="photo-input" accept="image/*" multiple capture="environment" onchange="handlePhotoUpload(this)">
+      <input type="file" id="photo-input" accept="image/*" multiple onchange="handlePhotoUpload(this)">
       <div class="photo-upload-icon">📷</div>
       <div class="photo-upload-label">タップして写真を追加<br><strong>カメラ撮影・ライブラリから選択</strong>どちらもOK</div>
     </div>
@@ -1207,6 +1250,47 @@ canvas { width:100%!important; height:100%!important; }
 
 <script>
 const STORAGE_KEY = 'tbp_v9';
+
+// 日替わり名言
+const DAILY_QUOTES = [
+  { text: "今日の努力が、3ヶ月後の自分の体を作る。", author: "— 結果は裏切らない" },
+  { text: "痛みは一時的だ。諦めは永遠に続く。", author: "— Lance Armstrong" },
+  { text: "限界だと思った瞬間が、本当のスタートだ。", author: "— 鉄の意志" },
+  { text: "鏡を見るたびに、昨日より強くなった自分がいる。", author: "— 毎日の積み重ね" },
+  { text: "やらない理由を探すな。やる理由を見つけろ。", author: "— 勝者の思考" },
+  { text: "筋肉は嘘をつかない。サボった日も、頑張った日も全部体に出る。", author: "— 身体は正直だ" },
+  { text: "成功者と失敗者の差は、才能ではなく継続力だ。", author: "— 習慣が人を作る" },
+  { text: "誰も見ていない時に何をするかが、本当のあなたを決める。", author: "— 自分との約束" },
+  { text: "食事制限はつらい。でも、目標を達成した時の喜びはそれ以上だ。", author: "— 我慢の先に栄光がある" },
+  { text: "1日1%の改善。365日続ければ、37倍強くなれる。", author: "— 複利の法則" },
+  { text: "腹筋は毎日作られるのではない。毎日の選択が腹筋を作る。", author: "— 食卓の上で作られる" },
+  { text: "今日サボったら、明日の自分が後悔する。今日頑張ったら、明日の自分が感謝する。", author: "— 未来の自分より" },
+  { text: "強い体は、強い精神から生まれる。", author: "— Mind & Body" },
+  { text: "体重計の数字は一時的だ。でも諦めない習慣は一生ものだ。", author: "— 継続は力なり" },
+  { text: "ジムに行きたくない日こそ、行く価値がある。", author: "— 本物の意志力" },
+  { text: "見た目を変えたければ、まず習慣を変えろ。", author: "— 変化の法則" },
+  { text: "汗は脂肪が泣いている証拠だ。", author: "— Keep Going" },
+  { text: "昨日の自分より、今日の自分が少しでも強ければそれでいい。", author: "— 自己ベスト更新中" },
+  { text: "トレーニングをやめるな。夢をあきらめるな。", author: "— Arnold Schwarzenegger" },
+  { text: "体を鍛えることは、自分を信じることだ。", author: "— 自信は筋肉から生まれる" },
+  { text: "今日のあなたの選択が、1年後の体を決める。", author: "— 選択の積み重ね" },
+  { text: "痩せたいなら動け。動きたくなければ、もっと強く痩せたいと思え。", author: "— 意志の炎" },
+  { text: "結果が出るまでやめるな。やめたら結果は永遠に出ない。", author: "— 不屈の精神" },
+  { text: "6パックは台所で作られる。", author: "— 食事が9割" },
+  { text: "自分の限界は、自分で決めるな。", author: "— No Limits" },
+  { text: "毎朝起きるたびに、目標に近づいているかを考えろ。", author: "— 朝の誓い" },
+  { text: "努力は必ず報われる。でも、やめた瞬間に終わる。", author: "— 続ける者が勝つ" },
+  { text: "体を変えるのに遅すぎることはない。今日が一番若い日だ。", author: "— Start Now" },
+  { text: "強い体は、強い人生を作る。", author: "— Body = Life" },
+  { text: "今日食べたものが、明日の自分になる。", author: "— You Are What You Eat" },
+];
+
+function renderDailyQuote() {
+  const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  const q = DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+  document.getElementById('daily-quote-text').textContent = q.text;
+  document.getElementById('daily-quote-author').textContent = q.author;
+}
 const START_W = 94;
 
 const WORKOUT_PRESETS = [
@@ -1233,7 +1317,7 @@ const FOOD_PRESETS = {
   dinner:  ['サラダチキン','豆腐','サラダ','焼き魚']
 };
 
-const RULES = [
+const DEFAULT_RULES = [
   {key:'cardio',  label:'朝有酸素'},
   {key:'no_carb', label:'夜炭水化物なし'},
   {key:'steps',   label:'1万歩以上'},
@@ -1241,6 +1325,37 @@ const RULES = [
   {key:'sleep',   label:'睡眠7時間以上'},
   {key:'gym',     label:'ジム or ラン完了'},
 ];
+let RULES = [...DEFAULT_RULES];
+
+function loadCustomRules() {
+  try { return JSON.parse(localStorage.getItem('tbp_custom_rules')) || []; }
+  catch { return []; }
+}
+function saveCustomRules(arr) { localStorage.setItem('tbp_custom_rules', JSON.stringify(arr)); }
+
+function addCustomRule() {
+  const input = document.getElementById('custom-rule-input');
+  const label = input.value.trim();
+  if (!label) return showToast('⚠️ ルール名を入力してください');
+  const key = 'custom_' + Date.now();
+  const customs = loadCustomRules();
+  customs.push({ key, label });
+  saveCustomRules(customs);
+  RULES = [...DEFAULT_RULES, ...customs];
+  input.value = '';
+  const d = loadAll();
+  renderRules(d.records[document.getElementById('rec-date').value || todayStr()]?.rules || {});
+  showToast('✅ ルールを追加しました');
+}
+
+function deleteCustomRule(key) {
+  const customs = loadCustomRules().filter(r => r.key !== key);
+  saveCustomRules(customs);
+  RULES = [...DEFAULT_RULES, ...customs];
+  const d = loadAll();
+  renderRules(d.records[document.getElementById('rec-date').value || todayStr()]?.rules || {});
+  showToast('🗑️ ルールを削除しました');
+}
 
 let selectedWorkouts = [];
 let customWorkouts = []; // ユーザーが自由入力で追加した種目（消えないよう永続保持）
@@ -1253,6 +1368,7 @@ function saveAll(d) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 
 function init() {
+  renderDailyQuote();
   const d = loadAll();
   const rec = d.records[todayStr()] || {};
   document.getElementById('rec-date').value = todayStr();
@@ -1266,6 +1382,7 @@ function init() {
   document.getElementById('food-memo').value    = rec.foodMemo    || '';
   selectedWorkouts = rec.workouts ? [...rec.workouts] : [];
   customWorkouts = d.customWorkouts ? [...d.customWorkouts] : [];
+  RULES = [...DEFAULT_RULES, ...loadCustomRules()];
 
   renderWorkoutTags();
   renderFoodTags();
@@ -1355,11 +1472,14 @@ function addCustomFood() {
 
 // RULES
 function renderRules(checkedMap) {
-  document.getElementById('daily-rules').innerHTML = RULES.map(r =>
-    `<button type="button" class="check-item ${checkedMap[r.key]?'checked':''}" onclick="toggleRule(this)">
-      <div class="check-box">${checkedMap[r.key]?'✓':''}</div>${r.label}
-    </button>`
-  ).join('');
+  document.getElementById('daily-rules').innerHTML = RULES.map(r => {
+    const isCustom = r.key.startsWith('custom_');
+    return `<button type="button" class="check-item ${checkedMap[r.key]?'checked':''}" onclick="toggleRule(this)">
+      <div class="check-box">${checkedMap[r.key]?'✓':''}</div>
+      <span style="flex:1">${r.label}</span>
+      ${isCustom ? `<span onclick="event.stopPropagation();deleteCustomRule('${r.key}')" style="color:var(--muted);font-size:0.7rem;padding:2px 6px;margin-left:4px">✕</span>` : ''}
+    </button>`;
+  }).join('');
 }
 function toggleRule(el) {
   el.classList.toggle('checked');
