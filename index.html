@@ -127,7 +127,7 @@ body::before {
 }
 .section-title { font-size:1rem; font-weight:700; margin-bottom:16px; }
 
-.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; box-sizing:border-box; }
 .form-group { display:flex; flex-direction:column; gap:5px; }
 .form-group label { font-size:0.65rem; color:var(--muted); font-family:'Space Mono',monospace; letter-spacing:0.1em; }
 .form-group input, .form-group select, .form-group textarea {
@@ -935,8 +935,11 @@ canvas { width:100%!important; height:100%!important; }
 
   <div class="section">
     <div class="section-title">📋 今日の記録</div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label>日付</label>
+      <input type="date" id="rec-date" style="width:100%;box-sizing:border-box">
+    </div>
     <div class="form-grid">
-      <div class="form-group"><label>日付</label><input type="date" id="rec-date"></div>
       <div class="form-group"><label>体重 (kg)</label><input type="number" id="rec-weight" placeholder="例: 93.5" step="0.1"></div>
       <div class="form-group"><label>体脂肪 (%)</label><input type="number" id="rec-fat" placeholder="例: 28.0" step="0.1"></div>
       <div class="form-group"><label>歩数</label><input type="number" id="rec-steps" placeholder="例: 10500"></div>
