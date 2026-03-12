@@ -11,8 +11,8 @@
 <style>
 :root {
   --bg: #0f0f0f;
-  --surface: #1a1a1a;
-  --card: #222222;
+  --surface: rgba(20,20,20,0.82);
+  --card: rgba(30,30,30,0.85);
   --border: #333333;
   --accent: #c9a84c;
   --accent-hover: #e0be6e;
@@ -23,26 +23,35 @@
   --blue: #42a5f5;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--bg); color:var(--text); font-family:'Noto Sans JP',sans-serif; min-height:100vh; }
+body {
+  background:
+    linear-gradient(rgba(15,15,15,0.88), rgba(15,15,15,0.88)),
+    url('https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1200&q=80') no-repeat center center fixed;
+  background-size: cover;
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  min-height: 100vh;
+  position: relative;
+}
+/* サイト全体の背景画像 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(rgba(15,15,15,0.88), rgba(15,15,15,0.88)),
+    url('https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1400&q=80') no-repeat center center;
+  background-size: cover;
+  z-index: -1;
+  pointer-events: none;
+}
 
 .site-header {
-  background: var(--surface);
+  background: transparent;
   border-bottom: 1px solid var(--border);
   padding: 20px 28px 24px;
   position: relative;
   overflow: hidden;
-}
-/* 実写フィットネス背景 */
-.site-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(to right, rgba(15,15,15,0.97) 0%, rgba(15,15,15,0.85) 55%, rgba(15,15,15,0.4) 100%),
-    url('https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1200&q=80') no-repeat right center;
-  background-size: auto 100%;
-  pointer-events: none;
-  z-index: 0;
 }
 .site-header > * { position: relative; z-index: 1; }
 
@@ -96,7 +105,10 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans JP',sans-
   display:grid; grid-template-columns:repeat(4,1fr); gap:12px; padding:16px 28px;
 }
 .stat-box {
-  background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 18px;
+  background: rgba(26,26,26,0.82);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 18px;
 }
 .stat-box .slabel { font-size:0.65rem; color:var(--muted); font-family:'Space Mono',monospace; letter-spacing:0.1em; margin-bottom:4px; }
 .stat-box .sval { font-size:1.6rem; font-weight:700; font-family:'Bebas Neue',cursive; letter-spacing:0.05em; color:var(--accent); }
@@ -107,7 +119,10 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans JP',sans-
 .left-col { padding-right:20px; }
 
 .section {
-  background:var(--surface); border:1px solid var(--border);
+  background: rgba(26,26,26,0.82);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border:1px solid rgba(255,255,255,0.08);
   border-radius:12px; padding:20px; margin-bottom:16px;
 }
 .section-title { font-size:1rem; font-weight:700; margin-bottom:16px; }
@@ -1092,6 +1107,14 @@ canvas { width:100%!important; height:100%!important; }
     </div>
   </div>
 
+  <!-- 📔 日記 -->
+  <div class="section">
+    <div class="section-title">📔 今日の日記</div>
+    <div style="margin-bottom:8px;font-size:0.75rem;color:var(--muted)">今日の気持ち・気づき・反省・明日への一言など自由に書いてください</div>
+    <textarea id="diary-text" placeholder="例：今日は筋トレがきつかったけど最後までやり切れた。食事も我慢できた。明日も頑張る！" style="width:100%;min-height:120px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:0.9rem;font-family:'Noto Sans JP',sans-serif;resize:vertical;outline:none;box-sizing:border-box;line-height:1.7"></textarea>
+    <div id="diary-past" style="margin-top:14px"></div>
+  </div>
+
   <div class="btn-row">
     <button class="btn btn-gold" onclick="saveRecord()">💾 保存</button>
     <button class="btn btn-outline" onclick="showExportModal()">📤 データを書き出し</button>
@@ -1380,6 +1403,7 @@ function init() {
   document.getElementById('food-lunch').value   = rec.foodLunch   || '';
   document.getElementById('food-dinner').value  = rec.foodDinner  || '';
   document.getElementById('food-memo').value    = rec.foodMemo    || '';
+  document.getElementById('diary-text').value   = rec.diary       || '';
   selectedWorkouts = rec.workouts ? [...rec.workouts] : [];
   customWorkouts = d.customWorkouts ? [...d.customWorkouts] : [];
   RULES = [...DEFAULT_RULES, ...loadCustomRules()];
@@ -1400,7 +1424,7 @@ function init() {
 function refreshAll() {
   renderStats(); renderScore(); renderCharts(); renderSummary();
   renderPastRecords(); renderProgress(); renderMilestones();
-  renderStreak(); renderBadges(); renderWeightCompare();
+  renderStreak(); renderBadges(); renderWeightCompare(); renderDiaryPast();
 }
 
 function saveGoal() {
@@ -1547,6 +1571,7 @@ function saveRecord() {
     foodLunch:   document.getElementById('food-lunch').value,
     foodDinner:  document.getElementById('food-dinner').value,
     foodMemo:    document.getElementById('food-memo').value,
+    diary:       document.getElementById('diary-text').value,
   };
   saveAll(d); refreshAll(); showToast('💾 保存しました！');
 }
@@ -1758,6 +1783,25 @@ function renderPastRecords() {
       </div>
     </div>`;
   }).join('');
+}
+
+function renderDiaryPast() {
+  const d = loadAll();
+  const recs = Object.values(d.records)
+    .filter(r => r.diary && r.diary.trim())
+    .sort((a,b) => b.date.localeCompare(a.date))
+    .slice(0, 10); // 直近10件
+  const el = document.getElementById('diary-past');
+  if (!recs.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:8px;font-family:'Space Mono',monospace">── 過去の日記 ──</div>
+    ${recs.map(r => `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">
+        <div style="font-size:0.68rem;color:var(--accent);font-family:'Space Mono',monospace;margin-bottom:6px">${r.date} ${r.weight ? '/ ' + r.weight + 'kg' : ''}</div>
+        <div style="font-size:0.85rem;line-height:1.7;color:var(--text);white-space:pre-wrap">${r.diary.replace(/</g,'&lt;')}</div>
+      </div>
+    `).join('')}
+  `;
 }
 
 // JSON
