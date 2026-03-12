@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="BODY PROJECT">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>TOMOHIRO BODY PROJECT</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -1775,7 +1778,7 @@ function renderPastRecords() {
   el.innerHTML=recs.map(r=>{
     const score=calcScore(r);
     const cls=score>=70?'badge-green':score>=40?'badge-gold':'badge-red';
-    return `<div class="record-item">
+    return `<div class="record-item" onclick="openRecordDetail('${r.date}')" style="cursor:pointer">
       <div>
         <div class="record-date">${r.date}</div>
         <div style="font-weight:700">${r.weight?r.weight+'kg':'体重未入力'}${r.fat?' / '+r.fat+'%':''}</div>
@@ -1785,10 +1788,82 @@ function renderPastRecords() {
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="badge ${cls}">${score}点</span>
-        <button class="btn btn-danger btn-sm" onclick="deleteRecord('${r.date}')">削除</button>
+        <span style="color:var(--muted);font-size:0.8rem">▶</span>
       </div>
     </div>`;
   }).join('');
+}
+
+function openRecordDetail(date) {
+  const d = loadAll();
+  const r = d.records[date];
+  if (!r) return;
+  const score = calcScore(r);
+  const cls = score>=70?'var(--green)':score>=40?'var(--accent)':'var(--red)';
+  const modal = document.getElementById('record-detail-modal');
+  document.getElementById('record-detail-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:'Bebas Neue',cursive;font-size:1.4rem;color:var(--accent)">${date}</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:1.8rem;color:${cls}">${score}点</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:var(--card);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px">体重</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--accent)">${r.weight?r.weight+'kg':'—'}</div>
+      </div>
+      <div style="background:var(--card);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px">体脂肪</div>
+        <div style="font-size:1.1rem;font-weight:700">${r.fat?r.fat+'%':'—'}</div>
+      </div>
+      <div style="background:var(--card);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px">歩数</div>
+        <div style="font-size:1.1rem;font-weight:700">${r.steps?r.steps.toLocaleString()+'歩':'—'}</div>
+      </div>
+      <div style="background:var(--card);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px">水分</div>
+        <div style="font-size:1.1rem;font-weight:700">${r.water?r.water+'L':'—'}</div>
+      </div>
+      <div style="background:var(--card);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px">睡眠</div>
+        <div style="font-size:1.1rem;font-weight:700">${r.sleep?r.sleep+'h':'—'}</div>
+      </div>
+      <div style="background:var(--card);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.6rem;color:var(--muted);margin-bottom:2px">有酸素</div>
+        <div style="font-size:1.1rem;font-weight:700">${r.cardio?r.cardio+'分':'—'}</div>
+      </div>
+    </div>
+
+    ${r.workouts&&r.workouts.length?`
+    <div style="margin-bottom:12px">
+      <div style="font-size:0.65rem;color:var(--muted);margin-bottom:6px;font-family:'Space Mono',monospace">💪 トレーニング</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${r.workouts.map(w=>`<span style="background:rgba(201,168,76,0.15);border:1px solid var(--accent);border-radius:20px;padding:4px 10px;font-size:0.75rem;color:var(--accent)">${w}</span>`).join('')}</div>
+    </div>`:''}
+
+    ${r.foodMorning||r.foodLunch||r.foodDinner?`
+    <div style="margin-bottom:12px">
+      <div style="font-size:0.65rem;color:var(--muted);margin-bottom:6px;font-family:'Space Mono',monospace">🍽️ 食事</div>
+      <div style="background:var(--card);border-radius:8px;padding:10px 12px;font-size:0.82rem;line-height:1.8">
+        ${r.foodMorning?`<div><span style="color:var(--muted);font-size:0.68rem">朝</span> ${r.foodMorning}</div>`:''}
+        ${r.foodLunch?`<div><span style="color:var(--muted);font-size:0.68rem">昼</span> ${r.foodLunch}</div>`:''}
+        ${r.foodDinner?`<div><span style="color:var(--muted);font-size:0.68rem">夜</span> ${r.foodDinner}</div>`:''}
+        ${r.foodMemo?`<div><span style="color:var(--muted);font-size:0.68rem">メモ</span> ${r.foodMemo}</div>`:''}
+      </div>
+    </div>`:''}
+
+    ${r.diary?`
+    <div style="margin-bottom:12px">
+      <div style="font-size:0.65rem;color:var(--muted);margin-bottom:6px;font-family:'Space Mono',monospace">📔 日記</div>
+      <div style="background:var(--card);border-radius:8px;padding:10px 12px;font-size:0.85rem;line-height:1.7;white-space:pre-wrap">${r.diary}</div>
+    </div>`:''}
+
+    <button type="button" onclick="deleteRecord('${date}');closeRecordDetail()" class="btn btn-danger btn-sm" style="width:100%;margin-top:4px">🗑️ この日の記録を削除</button>
+  `;
+  modal.style.display = 'flex';
+}
+
+function closeRecordDetail() {
+  document.getElementById('record-detail-modal').style.display = 'none';
 }
 
 function renderDiaryPast() {
@@ -2515,6 +2590,24 @@ renderWeightCompare();
 // 日付が変わったら自動でリセット
 let _lastDate = todayStr();
 
+// GitHubに新しいファイルがアップロードされたら自動でリロード
+const APP_VERSION = Date.now(); // ビルド時刻をバージョンとして使用
+function checkForUpdate() {
+  fetch(location.href + '?v=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+    .then(res => {
+      const lastModified = res.headers.get('last-modified');
+      if (lastModified) {
+        const stored = sessionStorage.getItem('_app_last_modified');
+        if (stored && stored !== lastModified) {
+          sessionStorage.setItem('_app_last_modified', lastModified);
+          location.reload(true); // 新しいバージョンが検出されたら強制リロード
+        } else if (!stored) {
+          sessionStorage.setItem('_app_last_modified', lastModified);
+        }
+      }
+    }).catch(() => {});
+}
+
 function checkDateChange() {
   const today = todayStr();
   if (today !== _lastDate) {
@@ -2531,8 +2624,23 @@ document.addEventListener('visibilitychange', () => {
 
 // 念のため1分ごとにもチェック
 setInterval(checkDateChange, 60000);
+
+// アプリ前面復帰時・30分ごとに更新チェック
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForUpdate();
+});
+setInterval(checkForUpdate, 30 * 60 * 1000);
+checkForUpdate();
 </script>
 <!-- カスタム確認ダイアログ（iOS Safari対応） -->
+<!-- 過去記録詳細モーダル -->
+<div id="record-detail-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99990;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;" onclick="if(event.target===this)closeRecordDetail()">
+  <div style="background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:20px;max-width:480px;width:100%;margin:auto;position:relative">
+    <button type="button" onclick="closeRecordDetail()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
+    <div id="record-detail-content"></div>
+  </div>
+</div>
+
 <div id="confirm-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;align-items:center;justify-content:center;padding:20px;">
   <div style="background:#222;border:1px solid #444;border-radius:14px;padding:24px;max-width:320px;width:100%;text-align:center;">
     <div id="confirm-msg" style="font-size:0.95rem;margin-bottom:20px;line-height:1.5;color:#e8e8e8;"></div>
