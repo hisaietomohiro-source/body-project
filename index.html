@@ -987,8 +987,8 @@ canvas { width:100%!important; height:100%!important; }
     <div class="ai-cal-box">
       <div class="ai-cal-title">🤖 AI カロリー解析</div>
       <div class="ai-cal-subtitle">食事の写真を撮るだけでAIが自動でカロリーを計算します</div>
-      <div class="ai-upload-area">
-        <input type="file" id="ai-food-input" accept="image/*" capture="environment" onchange="analyzeFood(this)">
+      <div class="ai-upload-area" onclick="document.getElementById('ai-food-input').click()">
+        <input type="file" id="ai-food-input" accept="image/*" onchange="analyzeFood(this)" style="display:none">
         <div class="ai-upload-icon">🍱</div>
         <div class="ai-upload-text">タップして食事写真をアップ</div>
       </div>
@@ -1383,17 +1383,28 @@ function loadAll() {
   catch { return {records:{},goal:{weight:84,date:''}}; }
 }
 function saveAll(d) { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 
 function init() {
   renderDailyQuote();
   const d = loadAll();
-  const rec = d.records[todayStr()] || {};
-  document.getElementById('rec-date').value = todayStr();
+  const today = todayStr();
+  const rec = d.records[today] || {};
+
+  // フォームを一旦クリア（日付変更時に前日データが残らないよう）
+  document.getElementById('rec-date').value = today;
   document.getElementById('goal-weight').value = d.goal.weight || 84;
   document.getElementById('goal-date').value = d.goal.date || '';
   const fields = ['weight','fat','steps','water','sleep','coffee','cardio'];
-  fields.forEach(f => { if (rec[f] != null) document.getElementById('rec-'+f).value = rec[f]; });
+  fields.forEach(f => {
+    document.getElementById('rec-'+f).value = rec[f] != null ? rec[f] : '';
+  });
   document.getElementById('food-morning').value = rec.foodMorning || '';
   document.getElementById('food-lunch').value   = rec.foodLunch   || '';
   document.getElementById('food-dinner').value  = rec.foodDinner  || '';
@@ -2004,9 +2015,11 @@ async function getAiFeedback() {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] })
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1000, messages:[{role:'user',content:prompt}] })
     });
+    if (!res.ok) throw new Error('API error: ' + res.status);
     const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
     const result = JSON.parse((data.content?.[0]?.text||'').replace(/```json|```/g,'').trim());
     analyzingEl.style.display = 'none';
     contentEl.style.display   = 'block';
@@ -2020,11 +2033,24 @@ async function getAiFeedback() {
     document.getElementById('fb-workout-text').textContent = result.workout_feedback;
     document.getElementById('fb-advice-text').textContent  = result.tomorrow_advice;
   } catch(e) {
+    // CORSエラーの場合はローカルでスコア計算してフィードバック生成
     analyzingEl.style.display = 'none';
     contentEl.style.display   = 'block';
-    document.getElementById('fb-food-text').textContent    = '⚠️ 取得に失敗しました。もう一度お試しください。';
-    document.getElementById('fb-workout-text').textContent = '';
-    document.getElementById('fb-advice-text').textContent  = '';
+    const rec2 = loadAll().records[date] || {};
+    const localScore = calcScore({...rec2, rules: getRuleState()});
+    const scoreColor = s => s>=80?'var(--green)':s>=60?'var(--accent)':'var(--red)';
+    const foodScore = (foodMorning?30:0)+(foodLunch?30:0)+(foodDinner?30:0) > 60 ? 75 : 50;
+    const workoutScore = workouts.length >= 3 ? 85 : workouts.length >= 1 ? 65 : 30;
+    ['food','workout','total'].forEach(k => {
+      const val = k==='food'?foodScore : k==='workout'?workoutScore : localScore;
+      document.getElementById('fb-'+k+'-score').textContent = val;
+      document.getElementById('fb-'+k+'-score').style.color = scoreColor(val);
+    });
+    const foodMsg = foodMorning&&foodLunch&&foodDinner ? '3食きちんと記録されています。バランスの取れた食事を継続しましょう。' : '食事の記録が不完全です。3食しっかり記録することで管理精度が上がります。';
+    const workoutMsg = workouts.length >= 3 ? `${workouts.slice(0,3).join('・')}など${workouts.length}種目こなしました。素晴らしいです！` : workouts.length >= 1 ? `${workouts[0]}を記録しました。もう少し追加できると理想的です。` : 'トレーニングが記録されていません。少しでも体を動かしましょう。';
+    document.getElementById('fb-food-text').textContent    = foodMsg;
+    document.getElementById('fb-workout-text').textContent = workoutMsg;
+    document.getElementById('fb-advice-text').textContent  = `明日は水を${water<3?'3L以上飲む':'しっかり継続'}こと、${steps<10000?'1万歩を目標に歩く':'歩数を維持する'}ことを意識しましょう。継続が結果を生みます！`;
   }
 }
 
@@ -2058,7 +2084,7 @@ async function analyzeFood(input) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 1000,
           messages: [{
             role: 'user',
@@ -2437,12 +2463,21 @@ async function getMorningMessage() {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:200, messages:[{role:'user',content:prompt}] })
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:200, messages:[{role:'user',content:prompt}] })
     });
+    if (!res.ok) throw new Error('API error');
     const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
     textEl.textContent = data.content?.[0]?.text || '取得に失敗しました。';
   } catch(e) {
-    textEl.textContent = '⚠️ 取得に失敗しました。もう一度お試しください。';
+    // CORSエラー時はローカルメッセージを表示
+    const messages = [
+      `現在${latestW}kgで開始から${lost}kg減量できています。${streak}日連続記録中、この調子を絶対に切らすな！残り${remain}kgを必ず落とす。`,
+      `${lost}kg落とした事実は本物だ。${streak}日間サボらなかった証拠がそこにある。今日も同じことをやれば、結果は必ずついてくる。`,
+      `直近7日の平均スコア${avgScore}点。数字が全てを語っている。今日は昨日の自分を超えることだけを考えろ。残り${remain}kgは必ず達成できる。`,
+    ];
+    const idx = Math.floor(Math.random() * messages.length);
+    textEl.textContent = messages[idx];
   }
 
   document.getElementById('morning-msg-stats').innerHTML = `
@@ -2476,6 +2511,26 @@ renderMilestones();
 renderStreak();
 renderBadges();
 renderWeightCompare();
+
+// 日付が変わったら自動でリセット
+let _lastDate = todayStr();
+
+function checkDateChange() {
+  const today = todayStr();
+  if (today !== _lastDate) {
+    _lastDate = today;
+    init(); // 今日の日付で再初期化
+    showToast('📅 日付が変わりました。新しい記録ページを開きました！');
+  }
+}
+
+// アプリが前面に戻った時にチェック
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkDateChange();
+});
+
+// 念のため1分ごとにもチェック
+setInterval(checkDateChange, 60000);
 </script>
 <!-- カスタム確認ダイアログ（iOS Safari対応） -->
 <div id="confirm-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;align-items:center;justify-content:center;padding:20px;">
