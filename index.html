@@ -1301,16 +1301,30 @@ canvas { width:100%!important; height:100%!important; }
 
 <script>
 const STORAGE_KEY = 'tbp_v9';
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz7w3b5AOpXvnyFx60i6tPO2jza7MIyr6vsNHhAU0UFsmUX1joZ7gOhOVf0DojWDILy/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxObw9_V12DixTAW3rIHElKnzk8MX8bqryAM5i7CZwxGqjT2xDVSAhZxP0Sww19FP4/exec';
 
 // Googleスプレッドシートに1件保存
 async function syncToSheet(record) {
   try {
+    const params = new URLSearchParams();
+    params.append('date', record.date||'');
+    params.append('weight', record.weight||'');
+    params.append('fat', record.fat||'');
+    params.append('steps', record.steps||'');
+    params.append('water', record.water||'');
+    params.append('sleep', record.sleep||'');
+    params.append('cardio', record.cardio||'');
+    params.append('foodMorning', record.foodMorning||'');
+    params.append('foodLunch', record.foodLunch||'');
+    params.append('foodDinner', record.foodDinner||'');
+    params.append('diary', record.diary||'');
+    params.append('workouts', (record.workouts||[]).join('・'));
+    params.append('updatedAt', record.updatedAt||new Date().toISOString());
     await fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(record)
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
     });
   } catch(e) { console.warn('sync error', e); }
 }
