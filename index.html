@@ -1301,7 +1301,7 @@ canvas { width:100%!important; height:100%!important; }
 
 <script>
 const STORAGE_KEY = 'tbp_v9';
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxtvJmakkWNYWGVO8MLPngkPugx-0yoAiutfqhl0V8spi5I9z8zzDQl_VsK9kzL05dY/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz7w3b5AOpXvnyFx60i6tPO2jza7MIyr6vsNHhAU0UFsmUX1joZ7gOhOVf0DojWDILy/exec';
 
 // Googleスプレッドシートに1件保存
 async function syncToSheet(record) {
@@ -1326,11 +1326,13 @@ async function syncFromSheet() {
     let updated = 0;
     json.records.forEach(r => {
       if (!r.date) return;
-      const existing = d.records[r.date];
-      // クラウドのデータで上書き（新しければ）
+      // 日付を正規化（2026-03-13T00:00:00.000Z → 2026-03-13）
+      const dateStr = String(r.date).substring(0, 10);
+      if (!dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) return;
+      const existing = d.records[dateStr];
       if (!existing || r.updatedAt > (existing.updatedAt||'')) {
-        d.records[r.date] = {
-          date: r.date,
+        d.records[dateStr] = {
+          date: dateStr,
           weight: r.weight ? parseFloat(r.weight) : null,
           fat: r.fat ? parseFloat(r.fat) : null,
           steps: parseInt(r.steps)||0,
