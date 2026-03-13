@@ -233,6 +233,25 @@ canvas { width:100%!important; height:100%!important; }
 }
 .record-item:hover { border-color:var(--accent); }
 .record-date { font-family:'Space Mono',monospace; font-size:0.65rem; color:var(--muted); margin-bottom:2px; }
+
+/* カレンダー */
+.cal-day-header { font-size:0.6rem; color:var(--muted); font-family:'Space Mono',monospace; padding:4px 0; }
+.cal-day {
+  aspect-ratio:1; border-radius:6px; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; cursor:pointer; position:relative;
+  font-size:0.72rem; font-weight:700; transition:transform 0.1s;
+  border:1px solid transparent;
+}
+.cal-day:active { transform:scale(0.92); }
+.cal-day.empty { cursor:default; }
+.cal-day.has-record { border-color:rgba(255,255,255,0.1); }
+.cal-day.today { border:2px solid var(--accent) !important; }
+.cal-day.score-green { background:rgba(76,175,80,0.25); color:var(--green); }
+.cal-day.score-gold  { background:rgba(201,168,76,0.2); color:var(--accent); }
+.cal-day.score-red   { background:rgba(229,57,53,0.2); color:var(--red); }
+.cal-day.no-record   { background:var(--card); color:var(--muted); }
+.cal-day.future      { background:transparent; color:#333; cursor:default; }
+.cal-score-dot { width:5px; height:5px; border-radius:50%; margin-top:2px; }
 .badge {
   display:inline-block; padding:2px 8px; border-radius:10px;
   font-size:0.65rem; font-family:'Space Mono',monospace;
@@ -1163,8 +1182,19 @@ canvas { width:100%!important; height:100%!important; }
   <div class="divider"></div>
 
   <div class="section">
-    <div class="section-title">📜 過去の記録</div>
-    <div class="record-list" id="past-records"><div class="empty">まだ記録がありません</div></div>
+    <div class="section-title">📅 カレンダー記録</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <button type="button" onclick="calPrev()" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 14px;font-size:1rem;cursor:pointer">‹</button>
+      <div id="cal-month-label" style="font-family:'Bebas Neue',cursive;font-size:1.2rem;color:var(--accent);letter-spacing:0.08em"></div>
+      <button type="button" onclick="calNext()" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 14px;font-size:1rem;cursor:pointer">›</button>
+    </div>
+    <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center"></div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;font-size:0.62rem;color:var(--muted)">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);margin-right:3px;vertical-align:middle"></span>70点以上</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-right:3px;vertical-align:middle"></span>40〜69点</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--red);margin-right:3px;vertical-align:middle"></span>40点未満</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--border);margin-right:3px;vertical-align:middle"></span>記録なし</span>
+    </div>
   </div>
 
 </div>
@@ -1770,29 +1800,131 @@ function deleteRecord(date) {
   });
 }
 
-function renderPastRecords() {
-  const d=loadAll();
-  const recs=Object.values(d.records).sort((a,b)=>b.date.localeCompare(a.date));
-  const el=document.getElementById('past-records');
-  if(!recs.length){el.innerHTML='<div class="empty">まだ記録がありません</div>';return;}
-  el.innerHTML=recs.map(r=>{
-    const score=calcScore(r);
-    const cls=score>=70?'badge-green':score>=40?'badge-gold':'badge-red';
-    return `<div class="record-item" onclick="openRecordDetail('${r.date}')" style="cursor:pointer">
-      <div>
-        <div class="record-date">${r.date}</div>
-        <div style="font-weight:700">${r.weight?r.weight+'kg':'体重未入力'}${r.fat?' / '+r.fat+'%':''}</div>
-        <div style="font-size:0.75rem;color:var(--muted);margin-top:2px">
-          ${r.steps?'👟'+r.steps.toLocaleString()+' ':''} ${r.workouts&&r.workouts.length?'💪'+r.workouts.slice(0,2).join('・'):''}
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="badge ${cls}">${score}点</span>
-        <span style="color:var(--muted);font-size:0.8rem">▶</span>
-      </div>
-    </div>`;
-  }).join('');
+// ============================================================
+// カレンダー
+// ============================================================
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-indexed
+
+function renderCalendar() {
+  const d = loadAll();
+  const today = todayStr();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const monthLabel = `${calYear}年${calMonth+1}月`;
+  document.getElementById('cal-month-label').textContent = monthLabel;
+
+  const dayHeaders = ['日','月','火','水','木','金','土'];
+  let html = dayHeaders.map(d => `<div class="cal-day-header">${d}</div>`).join('');
+
+  // 空白セル
+  for (let i = 0; i < firstDay; i++) html += `<div class="cal-day empty"></div>`;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const rec = d.records[dateStr];
+    const isFuture = dateStr > today;
+    const isToday = dateStr === today;
+
+    let cls = 'no-record';
+    let dot = '';
+    let scoreLabel = '';
+    if (rec && !isFuture) {
+      const score = calcScore(rec);
+      if (score >= 70) { cls = 'score-green'; dot = `<div class="cal-score-dot" style="background:var(--green)"></div>`; }
+      else if (score >= 40) { cls = 'score-gold'; dot = `<div class="cal-score-dot" style="background:var(--accent)"></div>`; }
+      else { cls = 'score-red'; dot = `<div class="cal-score-dot" style="background:var(--red)"></div>`; }
+    }
+    if (isFuture) cls = 'future';
+
+    const clickable = !isFuture;
+    html += `<div class="cal-day ${cls} has-record ${isToday?'today':''}"
+      ${clickable ? `onclick="openCalDay('${dateStr}')"` : ''}
+    >${day}${dot}</div>`;
+  }
+
+  document.getElementById('cal-grid').innerHTML = html;
 }
+
+function calPrev() {
+  calMonth--;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+function calNext() {
+  const now = new Date();
+  if (calYear > now.getFullYear() || (calYear === now.getFullYear() && calMonth >= now.getMonth())) return;
+  calMonth++;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+}
+
+function openCalDay(date) {
+  const d = loadAll();
+  const r = d.records[date];
+  const today = todayStr();
+
+  if (r) {
+    // 記録あり → 詳細表示（編集ボタン付き）
+    openRecordDetail(date);
+  } else {
+    // 記録なし → 過去記録入力モーダルを開く
+    openPastEdit(date);
+  }
+}
+
+// 過去の日付を編集するモーダル
+function openPastEdit(date) {
+  const d = loadAll();
+  const r = d.records[date] || {};
+  const modal = document.getElementById('past-edit-modal');
+  document.getElementById('past-edit-title').textContent = `📝 ${date} の記録`;
+  document.getElementById('pe-weight').value = r.weight || '';
+  document.getElementById('pe-fat').value = r.fat || '';
+  document.getElementById('pe-steps').value = r.steps || '';
+  document.getElementById('pe-water').value = r.water || '';
+  document.getElementById('pe-sleep').value = r.sleep || '';
+  document.getElementById('pe-cardio').value = r.cardio || '';
+  document.getElementById('pe-morning').value = r.foodMorning || '';
+  document.getElementById('pe-lunch').value = r.foodLunch || '';
+  document.getElementById('pe-dinner').value = r.foodDinner || '';
+  document.getElementById('pe-diary').value = r.diary || '';
+  document.getElementById('pe-save-btn').onclick = () => savePastEdit(date);
+  modal.style.display = 'flex';
+}
+
+function savePastEdit(date) {
+  const d = loadAll();
+  const existing = d.records[date] || { date };
+  d.records[date] = {
+    ...existing,
+    date,
+    weight:      parseFloat(document.getElementById('pe-weight').value) || null,
+    fat:         parseFloat(document.getElementById('pe-fat').value) || null,
+    steps:       parseInt(document.getElementById('pe-steps').value) || 0,
+    water:       parseFloat(document.getElementById('pe-water').value) || 0,
+    sleep:       parseFloat(document.getElementById('pe-sleep').value) || 0,
+    cardio:      parseInt(document.getElementById('pe-cardio').value) || 0,
+    foodMorning: document.getElementById('pe-morning').value,
+    foodLunch:   document.getElementById('pe-lunch').value,
+    foodDinner:  document.getElementById('pe-dinner').value,
+    diary:       document.getElementById('pe-diary').value,
+  };
+  saveAll(d);
+  closePastEdit();
+  renderCalendar();
+  refreshAll();
+  showToast(`✅ ${date} の記録を保存しました！`);
+}
+
+function closePastEdit() {
+  document.getElementById('past-edit-modal').style.display = 'none';
+}
+
+function renderPastRecords() {
+  // カレンダーに統合したため何もしない
+}
+
 
 function openRecordDetail(date) {
   const d = loadAll();
@@ -1857,7 +1989,10 @@ function openRecordDetail(date) {
       <div style="background:var(--card);border-radius:8px;padding:10px 12px;font-size:0.85rem;line-height:1.7;white-space:pre-wrap">${r.diary}</div>
     </div>`:''}
 
-    <button type="button" onclick="deleteRecord('${date}');closeRecordDetail()" class="btn btn-danger btn-sm" style="width:100%;margin-top:4px">🗑️ この日の記録を削除</button>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="button" onclick="closeRecordDetail();openPastEdit('${date}')" class="btn btn-sm" style="flex:1;background:rgba(201,168,76,0.15);border:1px solid var(--accent);color:var(--accent)">✏️ 編集する</button>
+      <button type="button" onclick="deleteRecord('${date}');closeRecordDetail();renderCalendar()" class="btn btn-danger btn-sm" style="flex:1">🗑️ 削除</button>
+    </div>
   `;
   modal.style.display = 'flex';
 }
@@ -2586,6 +2721,7 @@ renderMilestones();
 renderStreak();
 renderBadges();
 renderWeightCompare();
+renderCalendar();
 
 // 日付が変わったら自動でリセット
 let _lastDate = todayStr();
@@ -2638,6 +2774,30 @@ checkForUpdate();
   <div style="background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:20px;max-width:480px;width:100%;margin:auto;position:relative">
     <button type="button" onclick="closeRecordDetail()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
     <div id="record-detail-content"></div>
+  </div>
+</div>
+
+<!-- 過去記録編集モーダル -->
+<div id="past-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99991;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;" onclick="if(event.target===this)closePastEdit()">
+  <div style="background:#1a1a1a;border:1px solid var(--accent);border-radius:16px;padding:20px;max-width:480px;width:100%;margin:auto;position:relative">
+    <button type="button" onclick="closePastEdit()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
+    <div id="past-edit-title" style="font-family:'Bebas Neue',cursive;font-size:1.2rem;color:var(--accent);margin-bottom:16px"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">体重 (kg)</div><input id="pe-weight" type="number" step="0.1" placeholder="例: 93.5" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.9rem;box-sizing:border-box"></div>
+      <div><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">体脂肪 (%)</div><input id="pe-fat" type="number" step="0.1" placeholder="例: 27" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.9rem;box-sizing:border-box"></div>
+      <div><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">歩数</div><input id="pe-steps" type="number" placeholder="例: 8000" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.9rem;box-sizing:border-box"></div>
+      <div><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">水分 (L)</div><input id="pe-water" type="number" step="0.1" placeholder="例: 2.5" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.9rem;box-sizing:border-box"></div>
+      <div><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">睡眠 (h)</div><input id="pe-sleep" type="number" step="0.5" placeholder="例: 7" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.9rem;box-sizing:border-box"></div>
+      <div><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">有酸素 (分)</div><input id="pe-cardio" type="number" placeholder="例: 30" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.9rem;box-sizing:border-box"></div>
+    </div>
+
+    <div style="margin-bottom:8px"><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">🌅 朝食</div><textarea id="pe-morning" rows="2" placeholder="朝食の内容" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.85rem;box-sizing:border-box;resize:none"></textarea></div>
+    <div style="margin-bottom:8px"><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">☀️ 昼食</div><textarea id="pe-lunch" rows="2" placeholder="昼食の内容" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.85rem;box-sizing:border-box;resize:none"></textarea></div>
+    <div style="margin-bottom:8px"><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">🌙 夕食</div><textarea id="pe-dinner" rows="2" placeholder="夕食の内容" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.85rem;box-sizing:border-box;resize:none"></textarea></div>
+    <div style="margin-bottom:16px"><div style="font-size:0.62rem;color:var(--muted);margin-bottom:3px">📔 日記</div><textarea id="pe-diary" rows="3" placeholder="この日のメモ・振り返り" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.85rem;box-sizing:border-box;resize:none"></textarea></div>
+
+    <button id="pe-save-btn" type="button" class="btn btn-primary" style="width:100%;font-size:1rem;padding:12px">💾 保存する</button>
   </div>
 </div>
 
