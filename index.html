@@ -1301,6 +1301,61 @@ canvas { width:100%!important; height:100%!important; }
 
 <script>
 const STORAGE_KEY = 'tbp_v9';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycby_UuqT2ZgnWGYPb-d7II2p8CTYKgHrakHa6b_BVR6ZOfAsqAXJs9MFJzlsm5OrvYmK/exec';
+
+// Googleスプレッドシートに1件保存
+async function syncToSheet(record) {
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record)
+    });
+  } catch(e) { console.warn('sync error', e); }
+}
+
+// Googleスプレッドシートから全件取得してlocalStorageに反映
+async function syncFromSheet() {
+  try {
+    showToast('🔄 クラウドからデータを取得中...');
+    const res = await fetch(GAS_URL + '?t=' + Date.now());
+    const json = await res.json();
+    if (!json.records) return;
+    const d = loadAll();
+    let updated = 0;
+    json.records.forEach(r => {
+      if (!r.date) return;
+      const existing = d.records[r.date];
+      // クラウドのデータで上書き（新しければ）
+      if (!existing || r.updatedAt > (existing.updatedAt||'')) {
+        d.records[r.date] = {
+          date: r.date,
+          weight: r.weight ? parseFloat(r.weight) : null,
+          fat: r.fat ? parseFloat(r.fat) : null,
+          steps: parseInt(r.steps)||0,
+          water: parseFloat(r.water)||0,
+          sleep: parseFloat(r.sleep)||0,
+          cardio: parseInt(r.cardio)||0,
+          foodMorning: r.foodMorning||'',
+          foodLunch: r.foodLunch||'',
+          foodDinner: r.foodDinner||'',
+          diary: r.diary||'',
+          workouts: r.workouts ? r.workouts.split('・').filter(Boolean) : [],
+          updatedAt: r.updatedAt||''
+        };
+        updated++;
+      }
+    });
+    saveAll(d);
+    init();
+    renderCalendar();
+    refreshAll();
+    showToast(`✅ ${updated}件のデータを同期しました！`);
+  } catch(e) {
+    showToast('⚠️ 同期に失敗しました。ネットワークを確認してください。');
+  }
+}
 
 // 日替わり名言
 const DAILY_QUOTES = [
@@ -1595,7 +1650,7 @@ function renderScore() {
 function saveRecord() {
   const date = document.getElementById('rec-date').value||todayStr();
   const d = loadAll();
-  d.records[date] = {
+  const record = {
     date,
     weight: parseFloat(document.getElementById('rec-weight').value)||null,
     fat:    parseFloat(document.getElementById('rec-fat').value)||null,
@@ -1611,8 +1666,12 @@ function saveRecord() {
     foodDinner:  document.getElementById('food-dinner').value,
     foodMemo:    document.getElementById('food-memo').value,
     diary:       document.getElementById('diary-text').value,
+    updatedAt:   new Date().toISOString(),
   };
-  saveAll(d); refreshAll(); showToast('💾 保存しました！');
+  d.records[date] = record;
+  saveAll(d); refreshAll();
+  showToast('💾 保存中...');
+  syncToSheet(record).then(() => showToast('💾 保存＆クラウド同期しました！'));
 }
 
 // カスタム確認ダイアログ（iOS Safari の confirm ブロック対策）
@@ -2825,8 +2884,8 @@ checkForUpdate();
 <!-- 保存・データ管理ボタン（固定フッター） -->
 <div style="position:fixed;bottom:0;left:0;right:0;z-index:9999;background:rgba(15,15,15,0.97);border-top:1px solid var(--border);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));display:flex;gap:8px;flex-wrap:wrap;">
   <button class="btn btn-gold" onclick="saveRecord()" style="flex:1;min-width:80px">💾 保存</button>
+  <button class="btn btn-outline" onclick="syncFromSheet()" style="flex:1;min-width:80px;border-color:#4caf50;color:#4caf50">☁️ 同期</button>
   <button class="btn btn-outline" onclick="showExportModal()" style="flex:1;min-width:80px">📤 書き出し</button>
-  <button class="btn btn-outline" onclick="showImportModal()" style="flex:1;min-width:80px">📥 読み込み</button>
   <button class="btn btn-danger btn-sm" onclick="deleteToday()" style="flex:1;min-width:80px">🗑️ 削除</button>
   <input type="file" id="json-import" accept=".json,.txt" style="display:none" onchange="importJSON(this)">
 </div>
