@@ -1314,11 +1314,14 @@ async function syncToSheet(record) {
     params.append('water', record.water||'');
     params.append('sleep', record.sleep||'');
     params.append('cardio', record.cardio||'');
+    params.append('coffee', record.coffee||'');
     params.append('foodMorning', record.foodMorning||'');
     params.append('foodLunch', record.foodLunch||'');
     params.append('foodDinner', record.foodDinner||'');
+    params.append('foodMemo', record.foodMemo||'');
     params.append('diary', record.diary||'');
     params.append('workouts', (record.workouts||[]).join('・'));
+    params.append('rules', JSON.stringify(record.rules||{}));
     params.append('updatedAt', record.updatedAt||new Date().toISOString());
     await fetch(GAS_URL, {
       method: 'POST',
@@ -1353,11 +1356,14 @@ async function syncFromSheet() {
           water: parseFloat(r.water)||0,
           sleep: parseFloat(r.sleep)||0,
           cardio: parseInt(r.cardio)||0,
+          coffee: parseInt(r.coffee)||0,
           foodMorning: r.foodMorning||'',
           foodLunch: r.foodLunch||'',
           foodDinner: r.foodDinner||'',
+          foodMemo: r.foodMemo||'',
           diary: r.diary||'',
           workouts: r.workouts ? r.workouts.split('・').filter(Boolean) : [],
+          rules: r.rules ? (typeof r.rules === 'string' ? JSON.parse(r.rules) : r.rules) : {},
           updatedAt: r.updatedAt||''
         };
         updated++;
