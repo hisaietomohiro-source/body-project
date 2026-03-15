@@ -1069,6 +1069,35 @@ canvas { width:100%!important; height:100%!important; }
       <div class="form-group"><label>自由入力で食事追加（夜に追加）</label><input type="text" id="food-custom-input" placeholder="例：プロテインバー" inputmode="text" autocomplete="off"></div>
       <button class="btn btn-gold" onclick="addCustomFood()">食事追加</button>
     </div>
+
+    <!-- カロリー検索 -->
+    <div class="divider"></div>
+    <div style="font-size:0.85rem;font-weight:700;margin-bottom:10px">🔍 食品カロリー検索</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="text" id="cal-search-input" placeholder="例: ご飯1杯、ラーメン、サラダチキン" style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:0.9rem" inputmode="text" onkeydown="if(event.key==='Enter')searchCalorie()">
+      <button class="btn btn-gold btn-sm" onclick="searchCalorie()" style="white-space:nowrap">検索</button>
+    </div>
+    <div id="cal-search-result" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;font-size:0.85rem"></div>
+
+    <!-- 1日の合計カロリー -->
+    <div class="divider"></div>
+    <div style="font-size:0.85rem;font-weight:700;margin-bottom:10px">📊 1日の合計カロリー</div>
+    <div style="background:var(--card);border-radius:10px;padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:0.75rem;color:var(--muted)">目標カロリー</span>
+        <input type="number" id="cal-target" value="1600" style="width:90px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--accent);font-size:0.9rem;text-align:right"> kcal
+      </div>
+      <div id="cal-daily-list" style="font-size:0.8rem;color:var(--muted);margin-bottom:10px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:0.75rem;color:var(--muted)">合計</span>
+        <span id="cal-daily-total" style="font-family:'Bebas Neue',cursive;font-size:1.6rem;color:var(--accent)">— kcal</span>
+      </div>
+      <div id="cal-daily-bar-wrap" style="margin-top:8px;background:var(--border);border-radius:4px;height:8px;overflow:hidden">
+        <div id="cal-daily-bar" style="height:100%;border-radius:4px;background:var(--green);width:0%;transition:width 0.5s"></div>
+      </div>
+      <div id="cal-daily-status" style="font-size:0.72rem;color:var(--muted);margin-top:6px;text-align:right"></div>
+      <button class="btn btn-outline btn-sm" onclick="calcDailyCalorie()" style="width:100%;margin-top:10px">🔄 合計を計算する</button>
+    </div>
   </div>
 
   <!-- 📸 写真記録 -->
@@ -2082,6 +2111,138 @@ function closeRecordDetail() {
   document.getElementById('record-detail-modal').style.display = 'none';
 }
 
+// ============================================================
+// カロリー検索・合計計算
+// ============================================================
+const CALORIE_DB = [
+  // 主食
+  {k:['ご飯','白米','ライス','rice'],kcal:252,p:3.8,unit:'1杯(150g)'},
+  {k:['おにぎり','おむすび'],kcal:170,p:2.7,unit:'1個'},
+  {k:['食パン','トースト'],kcal:158,p:5.6,unit:'1枚(60g)'},
+  {k:['ラーメン'],kcal:480,p:18,unit:'1杯'},
+  {k:['うどん'],kcal:270,p:8,unit:'1杯'},
+  {k:['そば'],kcal:260,p:10,unit:'1杯'},
+  {k:['パスタ','スパゲッティ'],kcal:380,p:12,unit:'1人前'},
+  {k:['そうめん','ひやむぎ'],kcal:220,p:7,unit:'1人前'},
+  {k:['チャーハン','炒飯'],kcal:620,p:15,unit:'1人前'},
+  // タンパク質
+  {k:['サラダチキン','鶏むね肉'],kcal:110,p:24,unit:'1枚(100g)'},
+  {k:['ゆで卵','卵'],kcal:80,p:7,unit:'1個'},
+  {k:['納豆'],kcal:100,p:8,unit:'1パック'},
+  {k:['豆腐','絹豆腐','木綿豆腐'],kcal:72,p:6,unit:'1/2丁(150g)'},
+  {k:['焼き魚','鮭','さば','さんま'],kcal:200,p:22,unit:'1切れ'},
+  {k:['刺身','マグロ','サーモン'],kcal:130,p:22,unit:'1人前(80g)'},
+  {k:['ハンバーグ'],kcal:350,p:18,unit:'1個'},
+  {k:['唐揚げ','からあげ'],kcal:300,p:18,unit:'3個'},
+  {k:['ステーキ','牛肉'],kcal:380,p:28,unit:'1枚(150g)'},
+  {k:['焼肉'],kcal:400,p:25,unit:'1人前'},
+  {k:['プロテイン','プロテインシェイク'],kcal:120,p:25,unit:'1杯'},
+  {k:['ツナ缶'],kcal:70,p:16,unit:'1缶(70g)'},
+  // 野菜・サラダ
+  {k:['サラダ','グリーンサラダ'],kcal:30,p:1,unit:'1人前'},
+  {k:['シーザーサラダ'],kcal:180,p:6,unit:'1人前'},
+  {k:['コンビニサラダ'],kcal:50,p:2,unit:'1袋'},
+  {k:['ブロッコリー'],kcal:34,p:3.7,unit:'100g'},
+  {k:['トマト'],kcal:20,p:0.7,unit:'1個'},
+  // 乳製品
+  {k:['オイコス','ギリシャヨーグルト'],kcal:100,p:12,unit:'1個'},
+  {k:['ヨーグルト'],kcal:60,p:3.6,unit:'1個(100g)'},
+  {k:['牛乳'],kcal:130,p:6.6,unit:'200ml'},
+  {k:['チーズ'],kcal:90,p:5.7,unit:'1枚(18g)'},
+  // コンビニ・外食
+  {k:['弁当','お弁当'],kcal:650,p:20,unit:'1個'},
+  {k:['カレー','カレーライス'],kcal:650,p:15,unit:'1人前'},
+  {k:['牛丼'],kcal:670,p:22,unit:'1杯(並)'},
+  {k:['親子丼'],kcal:580,p:24,unit:'1杯'},
+  {k:['天丼'],kcal:750,p:18,unit:'1杯'},
+  {k:['寿司','すし'],kcal:350,p:18,unit:'10貫'},
+  {k:['餃子','ぎょうざ'],kcal:200,p:10,unit:'6個'},
+  {k:['ピザ'],kcal:500,p:18,unit:'2切れ'},
+  {k:['バーガー','ハンバーガー'],kcal:450,p:18,unit:'1個'},
+  // 間食・飲み物
+  {k:['バナナ'],kcal:86,p:1.1,unit:'1本'},
+  {k:['りんご','アップル'],kcal:60,p:0.2,unit:'1/2個'},
+  {k:['プロテインバー'],kcal:200,p:20,unit:'1本'},
+  {k:['おせんべい','せんべい'],kcal:110,p:2,unit:'5枚'},
+  {k:['チョコレート','チョコ'],kcal:250,p:3,unit:'1枚(50g)'},
+  {k:['アイス','アイスクリーム'],kcal:200,p:3,unit:'1個'},
+  {k:['コーヒー','ブラックコーヒー'],kcal:5,p:0.3,unit:'1杯'},
+  {k:['カフェラテ','ラテ'],kcal:120,p:6,unit:'1杯'},
+  {k:['ビール'],kcal:200,p:1.5,unit:'1缶(350ml)'},
+  {k:['ハイボール'],kcal:140,p:0,unit:'1杯'},
+];
+
+function searchCalorie() {
+  const q = document.getElementById('cal-search-input').value.trim();
+  if (!q) return;
+  const resultEl = document.getElementById('cal-search-result');
+
+  // DBから検索
+  const matched = CALORIE_DB.filter(item =>
+    item.k.some(k => q.includes(k) || k.includes(q))
+  );
+
+  if (matched.length > 0) {
+    const item = matched[0];
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-weight:700;color:var(--text)">${item.k[0]}</div>
+        <div style="font-size:0.65rem;color:var(--muted)">${item.unit}</div>
+      </div>
+      <div style="display:flex;gap:16px">
+        <div><span style="font-family:'Bebas Neue',cursive;font-size:1.4rem;color:var(--accent)">${item.kcal}</span><span style="font-size:0.7rem;color:var(--muted)"> kcal</span></div>
+        <div><span style="font-family:'Bebas Neue',cursive;font-size:1.4rem;color:var(--green)">${item.p}</span><span style="font-size:0.7rem;color:var(--muted)"> g タンパク質</span></div>
+      </div>
+      ${matched.length > 1 ? `<div style="font-size:0.68rem;color:var(--muted);margin-top:6px">他 ${matched.length-1}件一致</div>` : ''}
+    `;
+  } else {
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<div style="color:var(--muted);font-size:0.82rem">「${q}」は見つかりませんでした。食事欄にキーワードを含めて検索してください。</div>`;
+  }
+}
+
+function calcDailyCalorie() {
+  const morning = document.getElementById('food-morning').value || '';
+  const lunch   = document.getElementById('food-lunch').value   || '';
+  const dinner  = document.getElementById('food-dinner').value  || '';
+  const memo    = document.getElementById('food-memo').value    || '';
+  const allText = morning + ' ' + lunch + ' ' + dinner + ' ' + memo;
+
+  let totalKcal = 0;
+  const found = [];
+
+  CALORIE_DB.forEach(item => {
+    if (item.k.some(k => allText.includes(k))) {
+      totalKcal += item.kcal;
+      found.push({name: item.k[0], kcal: item.kcal, unit: item.unit});
+    }
+  });
+
+  const target = parseInt(document.getElementById('cal-target').value) || 1600;
+  const pct = Math.min(100, Math.round(totalKcal / target * 100));
+  const barColor = totalKcal > target ? 'var(--red)' : totalKcal > target*0.85 ? 'var(--accent)' : 'var(--green)';
+  const remain = target - totalKcal;
+
+  document.getElementById('cal-daily-total').textContent = totalKcal ? totalKcal + ' kcal' : '— kcal';
+  document.getElementById('cal-daily-bar').style.width = pct + '%';
+  document.getElementById('cal-daily-bar').style.background = barColor;
+  document.getElementById('cal-daily-status').textContent = totalKcal
+    ? (remain >= 0 ? `目標まであと ${remain} kcal` : `目標を ${Math.abs(remain)} kcal オーバー`)
+    : '';
+  document.getElementById('cal-daily-list').innerHTML = found.length
+    ? found.map(f => `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)"><span>${f.name}（${f.unit}）</span><span style="color:var(--accent)">${f.kcal} kcal</span></div>`).join('')
+    : '<div style="color:var(--muted)">食事を入力してから計算してください</div>';
+}
+
+// 入力欄が変わったら自動計算（BOOTで登録）
+function setupCalorieListeners() {
+  ['food-morning','food-lunch','food-dinner','food-memo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', calcDailyCalorie);
+  });
+}
+
 function renderDiaryPast() {
   const d = loadAll();
   const recs = Object.values(d.records)
@@ -2803,6 +2964,8 @@ renderStreak();
 renderBadges();
 renderWeightCompare();
 renderCalendar();
+setupCalorieListeners();
+calcDailyCalorie();
 
 // 日付が変わったら自動でリセット
 let _lastDate = todayStr();
